@@ -142,8 +142,13 @@ with tab1:
     m4.metric("Perimeter", f"{gstats['perimeter_share']:.0f}%")
     m5.metric("Paint share", f"{gstats['paint_share']:.0f}%")
 
-    fig1 = build_scene1_figure(game_shots, title="")
-    st.plotly_chart(fig1, use_container_width=True, config={"displayModeBar": False})
+    fig1 = build_scene1_figure(game_shots, title="", animate=True)
+    st.plotly_chart(
+        fig1,
+        use_container_width=True,
+        config={"displayModeBar": False},
+        key=f"scene1_{game_id}",
+    )
 
     with st.expander("Shot log"):
         show_cols = [

@@ -81,6 +81,8 @@ def test_classify_zone_rules():
 
 
 def test_scene1_single_game(playoff_fgs: pd.DataFrame):
+    from helpers import sort_shots_chronological
+
     gid = int(playoff_fgs["gameId"].iloc[0])
     game = playoff_fgs[playoff_fgs["gameId"] == gid]
     assert game["gameId"].nunique() == 1
@@ -88,9 +90,14 @@ def test_scene1_single_game(playoff_fgs: pd.DataFrame):
     assert not arcs.empty
     assert set(arcs["made"].unique()).issubset({True, False})
     assert "zone" in arcs.columns or "result" in arcs.columns
-    fig = build_scene1_figure(game, title="test")
+    assert "shot_order" in arcs.columns
+    # Chronological orders are non-decreasing within game
+    ordered = sort_shots_chronological(game)
+    assert len(ordered) == len(game)
+    fig = build_scene1_figure(game, title="", animate=True)
     assert fig is not None
     assert len(fig.data) > 0
+    assert fig.frames is not None and len(fig.frames) > 0
 
 
 def test_scene2_full_run(playoff_fgs: pd.DataFrame):

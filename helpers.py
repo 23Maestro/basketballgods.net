@@ -28,13 +28,23 @@ COURT_LENGTH = 94.0
 COURT_WIDTH = 50.0
 PAINT_FEET = 8.0  # distance band for paint callouts
 
-# Marketplace-style colors
+# Shot result colors
 COLOR_MADE = "#00C853"  # green arcs (scene 1)
 COLOR_MISS = "#FF1744"  # red arcs (scene 1)
 COLOR_MADE_2D = "#F5A623"  # orange dots (scene 2)
 COLOR_MISS_2D = "#8FA3B8"  # cool gray-blue dots (scene 2)
-COURT_LINE = "#C5CDD8"
-COURT_BG_2D = "#0F1B2D"
+
+# San Antonio Spurs palette (Scene 2 upright half-court)
+SPURS_BLACK = "#0A0A0A"
+SPURS_CHARCOAL = "#1A1A1A"
+SPURS_SILVER = "#C4CED4"
+SPURS_SILVER_DIM = "#8A939C"
+SPURS_WOOD = "#C4A574"
+SPURS_WOOD_DARK = "#A88858"
+SPURS_RIM = "#E8E8E8"
+SPURS_APRON = "#121212"
+COURT_LINE = SPURS_SILVER
+COURT_BG_2D = SPURS_BLACK
 
 
 # --------------------------------------------------------------
@@ -192,53 +202,95 @@ class CourtCoordinates:
 
 
 def halfcourt_line_traces(color: str = COURT_LINE) -> list[go.Scatter]:
-    """2D half-court outline (basket at bottom) for Scene 2 overview."""
+    """Upright Spurs half-court (basket at bottom, straight top-down)."""
+    return halfcourt_spurs_traces(line_color=color)
+
+
+def halfcourt_spurs_traces(
+    line_color: str = SPURS_SILVER,
+    wood: str = SPURS_WOOD,
+    paint: str = SPURS_CHARCOAL,
+    apron: str = SPURS_APRON,
+) -> list[go.Scatter]:
+    """
+    Orthographic half-court: x = width 0–50, y = baseline→half 0–47.
+    Spurs black paint + silver lines + maple floor (no tilt).
+    """
     traces: list[go.Scatter] = []
 
-    def line(xs, ys, name="court"):
+    def fill(xs, ys, fillcolor, name="fill"):
         traces.append(
             go.Scatter(
-                x=xs,
-                y=ys,
+                x=list(xs),
+                y=list(ys),
                 mode="lines",
-                line=dict(color=color, width=1.5),
+                fill="toself",
+                fillcolor=fillcolor,
+                line=dict(width=0, color=fillcolor),
                 hoverinfo="skip",
                 showlegend=False,
                 name=name,
             )
         )
 
-    # Outer: width 0–50, depth 0–47 (half court)
-    line([0, 50, 50, 0, 0], [0, 0, 47, 47, 0])
-    # Paint (16 ft wide, 19 ft deep)
-    paint_l, paint_r = 25 - 8, 25 + 8
-    line([paint_l, paint_r, paint_r, paint_l, paint_l], [0, 0, 19, 19, 0])
-    # Free-throw circle
+    def line(xs, ys, width=2.0, col=None, name="court"):
+        traces.append(
+            go.Scatter(
+                x=list(xs),
+                y=list(ys),
+                mode="lines",
+                line=dict(color=col or line_color, width=width),
+                hoverinfo="skip",
+                showlegend=False,
+                name=name,
+            )
+        )
+
+    # Apron (outside floor) then wood floor — upright rectangle
+    fill([-2, 52, 52, -2, -2], [-2, -2, 48, 48, -2], apron, "apron")
+    fill([0, 50, 50, 0, 0], [0, 0, 47, 47, 0], wood, "floor")
+
+    # Black paint (key)
+    paint_l, paint_r = 17.0, 33.0
+    fill([paint_l, paint_r, paint_r, paint_l, paint_l], [0, 0, 19, 19, 0], paint, "paint")
+
+    # Outer boundary
+    line([0, 50, 50, 0, 0], [0, 0, 47, 47, 0], width=2.5)
+    # Paint outline
+    line([paint_l, paint_r, paint_r, paint_l, paint_l], [0, 0, 19, 19, 0], width=2.0)
+    # FT line
+    line([paint_l, paint_r], [19, 19], width=2.0)
+    # Free-throw circle (upper half toward midcourt)
     theta = np.linspace(0, np.pi, 60)
-    line(25 + 6 * np.cos(theta), 19 + 6 * np.sin(theta))
+    line(25 + 6 * np.cos(theta), 19 + 6 * np.sin(theta), width=1.8)
     # Restricted area
     theta_r = np.linspace(0, np.pi, 40)
-    line(25 + 4 * np.cos(theta_r), 5.25 + 4 * np.sin(theta_r))
-    # Hoop
+    line(25 + 4 * np.cos(theta_r), ESPN_RIM_Y + 4 * np.sin(theta_r), width=1.5)
+    # Hoop + backboard (silver)
     th = np.linspace(0, 2 * np.pi, 60)
-    line(25 + 0.75 * np.cos(th), 5.25 + 0.75 * np.sin(th), name="hoop")
-    # Backboard
-    line([22, 28], [4, 4])
-    # 3-point arc: corners at y=14, arc radius 23.75 from rim
-    corner_y = 14.0
+    line(25 + 0.75 * np.cos(th), ESPN_RIM_Y + 0.75 * np.sin(th), width=2.5, col=SPURS_RIM, name="hoop")
+    line([22, 28], [4.0, 4.0], width=3.0, col=SPURS_SILVER_DIM, name="board")
+    # 3-point corners + arc
     r3 = 23.75
-    # left corner
-    line([3, 3], [0, corner_y])
-    line([47, 47], [0, corner_y])
-    # arc between corners
-    # angle from rim to corner points
+    y_lo, y_hi = 3.0, 47.0
+    # corner lines from baseline
+    dy = ESPN_RIM_Y - 3.0
+    dx = float(np.sqrt(max(r3**2 - (ESPN_RIM_X - 3.0) ** 2, 0.0)))
+    # Use standard: corners at x=3 and x=47, arc from rim
+    corner_y = 14.0  # where corner meets arc approx for NBA
+
     def ang(x, y):
         return np.arctan2(y - ESPN_RIM_Y, x - ESPN_RIM_X)
 
     a0 = ang(3, corner_y)
     a1 = ang(47, corner_y)
-    aa = np.linspace(a0, a1, 80)
-    line(ESPN_RIM_X + r3 * np.cos(aa), ESPN_RIM_Y + r3 * np.sin(aa))
+    # extend corner lines from baseline to arc intersection
+    line([3, 3], [0, corner_y], width=2.0)
+    line([47, 47], [0, corner_y], width=2.0)
+    aa = np.linspace(a0, a1, 90)
+    line(ESPN_RIM_X + r3 * np.cos(aa), ESPN_RIM_Y + r3 * np.sin(aa), width=2.0)
+    # Hash marks / midcourt hash at y=47
+    line([0, 50], [47, 47], width=1.5, col=SPURS_SILVER_DIM)
     return traces
 
 
@@ -797,16 +849,36 @@ def compute_playoff_stats(df: pd.DataFrame) -> dict:
 # --------------------------------------------------------------
 # 5️⃣  SCENE BUILDERS (testable without Streamlit)
 # --------------------------------------------------------------
+def sort_shots_chronological(shots: pd.DataFrame) -> pd.DataFrame:
+    """Order FGs as they happened in the game (period → sequence)."""
+    if shots is None or shots.empty:
+        return pd.DataFrame() if shots is None else shots
+    out = shots.copy()
+    if "sequenceNumber" in out.columns:
+        out["_seq"] = pd.to_numeric(out["sequenceNumber"], errors="coerce")
+    else:
+        out["_seq"] = np.arange(len(out))
+    if "period.number" in out.columns:
+        out["_per"] = pd.to_numeric(out["period.number"], errors="coerce")
+    elif "period" in out.columns:
+        out["_per"] = pd.to_numeric(out["period"], errors="coerce")
+    else:
+        out["_per"] = 0
+    out = out.sort_values(["_per", "_seq"], kind="mergesort").reset_index(drop=True)
+    return out.drop(columns=["_seq", "_per"], errors="ignore")
+
+
 def build_scene1_arcs(shots: pd.DataFrame) -> pd.DataFrame:
     """
-    Scene 1 data: 3D arc polylines for one game (or any FG subset).
+    Scene 1 data: 3D arc polylines for one game (chronological).
     Expects enrich_shot_row columns (court_x/court_y or ESPN coords).
     """
     if shots is None or shots.empty:
         return pd.DataFrame()
 
+    ordered = sort_shots_chronological(shots)
     frames: list[pd.DataFrame] = []
-    for i, row in shots.iterrows():
+    for i, row in ordered.iterrows():
         cx = row.get("court_x")
         cy = row.get("court_y")
         if pd.isna(cx) or pd.isna(cy):
@@ -829,68 +901,154 @@ def build_scene1_arcs(shots: pd.DataFrame) -> pd.DataFrame:
             zone=row.get("zone"),
             shot_distance=row.get("shot_distance"),
         )
-        frames.append(shot.to_df())
+        arc = shot.to_df()
+        arc["shot_order"] = len(frames)
+        frames.append(arc)
 
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True)
 
 
-def build_scene1_figure(shots: pd.DataFrame, title: str = "") -> go.Figure:
-    """Scene 1: full-court 3D arcs (green made / red missed). No big title overlay."""
-    arcs = build_scene1_arcs(shots)
+def _scene1_court_traces() -> list[go.Scatter3d]:
     court = CourtCoordinates().get_court_lines()
-    fig = go.Figure()
-    wood = "#CDB892"
-    line_c = "#2A2418"
-
+    wood_line = "#2A2418"
+    traces: list[go.Scatter3d] = []
     for grp, gdf in court.groupby("line_group"):
         is_hoop = gdf["color"].iloc[0] == "hoop"
-        fig.add_trace(
+        traces.append(
             go.Scatter3d(
                 x=gdf["x"],
                 y=gdf["y"],
                 z=gdf["z"],
                 mode="lines",
-                line=dict(color="#E07030" if is_hoop else line_c, width=3 if is_hoop else 2.5),
+                line=dict(
+                    color="#E07030" if is_hoop else wood_line,
+                    width=3 if is_hoop else 2.5,
+                ),
                 hoverinfo="skip",
                 showlegend=False,
                 name=str(grp),
             )
         )
+    return traces
 
+
+def _empty_arc_trace() -> go.Scatter3d:
+    return go.Scatter3d(
+        x=[None],
+        y=[None],
+        z=[None],
+        mode="lines",
+        line=dict(color="rgba(0,0,0,0)", width=5),
+        hoverinfo="skip",
+        showlegend=False,
+    )
+
+
+def _empty_marker_trace() -> go.Scatter3d:
+    return go.Scatter3d(
+        x=[None],
+        y=[None],
+        z=[None],
+        mode="markers",
+        marker=dict(size=3.5, color="rgba(0,0,0,0)"),
+        hoverinfo="skip",
+        showlegend=False,
+    )
+
+
+def _arc_trace_from_df(
+    gdf: pd.DataFrame,
+    *,
+    frac: float = 1.0,
+    opacity: float = 1.0,
+    show_marker: bool = True,
+) -> tuple[go.Scatter3d, go.Scatter3d]:
+    """Partial arc (frac of points from release → rim) + floor marker."""
+    n = max(2, int(len(gdf) * max(0.05, min(1.0, frac))))
+    sub = gdf.iloc[:n]
+    made = bool(gdf["made"].iloc[0])
+    base = COLOR_MADE if made else COLOR_MISS
+    # bake opacity into rgba-ish via marker/line color with opacity on marker
+    color = base
+    arc = go.Scatter3d(
+        x=sub["x"],
+        y=sub["y"],
+        z=sub["z"],
+        mode="lines",
+        line=dict(color=color, width=6 if opacity > 0.7 else 4),
+        opacity=opacity,
+        hovertemplate=(
+            f"{gdf['description'].iloc[0]}<br>"
+            f"Q{gdf['quarter'].iloc[0]} – {gdf['clock'].iloc[0]} left<br>"
+            f"{'Made' if made else 'Missed'}<extra></extra>"
+        ),
+        showlegend=False,
+    )
+    if show_marker and frac >= 0.15:
+        mk = go.Scatter3d(
+            x=[gdf["x"].iloc[0]],
+            y=[gdf["y"].iloc[0]],
+            z=[0.05],
+            mode="markers",
+            marker=dict(size=4, color=color, opacity=opacity),
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    else:
+        mk = _empty_marker_trace()
+    return arc, mk
+
+
+def build_scene1_figure(
+    shots: pd.DataFrame,
+    title: str = "",
+    *,
+    animate: bool = True,
+    draw_steps: int = 6,
+    past_opacity: float = 0.32,
+) -> go.Figure:
+    """
+    Scene 1: 3D arcs green/red. When animate=True, Play draws each shot
+    release→rim in chronological order, older arcs fade.
+    """
+    arcs = build_scene1_arcs(shots)
+    court_traces = _scene1_court_traces()
+    wood = "#CDB892"
+    n_court = len(court_traces)
+
+    # Ordered unique shots
+    shot_ids: list[str] = []
+    shot_dfs: list[pd.DataFrame] = []
     if not arcs.empty:
-        for _, gdf in arcs.groupby("line_id"):
-            made = bool(gdf["made"].iloc[0])
-            color = COLOR_MADE if made else COLOR_MISS
-            fig.add_trace(
-                go.Scatter3d(
-                    x=gdf["x"],
-                    y=gdf["y"],
-                    z=gdf["z"],
-                    mode="lines",
-                    line=dict(color=color, width=5),
-                    legendgroup="Made" if made else "Missed",
-                    showlegend=False,
-                    hovertemplate=(
-                        f"{gdf['description'].iloc[0]}<br>"
-                        f"Q{gdf['quarter'].iloc[0]} – {gdf['clock'].iloc[0]} left<br>"
-                        f"{'Made' if made else 'Missed'}<extra></extra>"
-                    ),
-                )
+        for sid, gdf in arcs.groupby("line_id", sort=False):
+            shot_ids.append(str(sid))
+            shot_dfs.append(gdf.reset_index(drop=True))
+        # groupby may not preserve chrono if line_id is not order; use shot_order
+        if "shot_order" in arcs.columns:
+            order = (
+                arcs.groupby("line_id", sort=False)["shot_order"]
+                .first()
+                .sort_values()
             )
-            fig.add_trace(
-                go.Scatter3d(
-                    x=[gdf["x"].iloc[0]],
-                    y=[gdf["y"].iloc[0]],
-                    z=[0.05],
-                    mode="markers",
-                    marker=dict(size=3.5, color=color),
-                    showlegend=False,
-                    hoverinfo="skip",
-                )
-            )
+            shot_ids = [str(i) for i in order.index]
+            shot_dfs = [
+                arcs[arcs["line_id"] == sid].reset_index(drop=True) for sid in shot_ids
+            ]
 
+    n_shots = len(shot_dfs)
+    fig = go.Figure()
+
+    for tr in court_traces:
+        fig.add_trace(tr)
+
+    # Pre-allocate arc + marker slots (constant trace count for animation)
+    for _ in range(n_shots):
+        fig.add_trace(_empty_arc_trace())
+        fig.add_trace(_empty_marker_trace())
+
+    # Legend
     fig.add_trace(
         go.Scatter3d(
             x=[None], y=[None], z=[None], mode="lines",
@@ -904,29 +1062,92 @@ def build_scene1_figure(shots: pd.DataFrame, title: str = "") -> go.Figure:
         )
     )
 
-    layout_kw = dict(
-        scene=dict(
-            xaxis=dict(
-                range=[0, 94], showticklabels=False, title="", showgrid=False,
-                backgroundcolor=wood, showbackground=True, zeroline=False,
-            ),
-            yaxis=dict(
-                range=[0, 50], showticklabels=False, title="", showgrid=False,
-                backgroundcolor=wood, showbackground=True, zeroline=False,
-            ),
-            zaxis=dict(
-                range=[0, 11], showticklabels=False, title="", showgrid=False,
-                backgroundcolor=wood, showbackground=True, zeroline=False,
-            ),
-            aspectratio=dict(x=94 / 50, y=1, z=0.22),
-            bgcolor=wood,
-            camera=dict(eye=dict(x=1.35, y=-1.55, z=0.55), center=dict(x=0.15, y=0, z=-0.1)),
+    scene = dict(
+        xaxis=dict(
+            range=[0, 94], showticklabels=False, title="", showgrid=False,
+            backgroundcolor=wood, showbackground=True, zeroline=False,
         ),
-        margin=dict(l=0, r=0, t=28, b=0),
+        yaxis=dict(
+            range=[0, 50], showticklabels=False, title="", showgrid=False,
+            backgroundcolor=wood, showbackground=True, zeroline=False,
+        ),
+        zaxis=dict(
+            range=[0, 11], showticklabels=False, title="", showgrid=False,
+            backgroundcolor=wood, showbackground=True, zeroline=False,
+        ),
+        aspectratio=dict(x=94 / 50, y=1, z=0.22),
+        bgcolor=wood,
+        camera=dict(eye=dict(x=1.35, y=-1.55, z=0.55), center=dict(x=0.15, y=0, z=-0.1)),
+    )
+
+    def pack_frame(active_idx: int, frac: float) -> list:
+        """Court + per-shot arc/marker data for one animation frame."""
+        data = []
+        for tr in court_traces:
+            data.append(
+                go.Scatter3d(
+                    x=tr.x, y=tr.y, z=tr.z, mode=tr.mode, line=tr.line,
+                    hoverinfo="skip", showlegend=False,
+                )
+            )
+        for i, gdf in enumerate(shot_dfs):
+            if i < active_idx:
+                arc, mk = _arc_trace_from_df(gdf, frac=1.0, opacity=past_opacity)
+            elif i == active_idx:
+                arc, mk = _arc_trace_from_df(gdf, frac=frac, opacity=1.0)
+            else:
+                arc, mk = _empty_arc_trace(), _empty_marker_trace()
+            data.append(arc)
+            data.append(mk)
+        # legend placeholders (unchanged)
+        data.append(
+            go.Scatter3d(
+                x=[None], y=[None], z=[None], mode="lines",
+                line=dict(color=COLOR_MADE, width=5), name="Made", showlegend=True,
+            )
+        )
+        data.append(
+            go.Scatter3d(
+                x=[None], y=[None], z=[None], mode="lines",
+                line=dict(color=COLOR_MISS, width=5), name="Missed", showlegend=True,
+            )
+        )
+        return data
+
+    # Final static state: all shots full
+    if n_shots:
+        final = pack_frame(n_shots - 1, 1.0)
+        # also show all past at full opacity for resting state
+        final = []
+        for tr in court_traces:
+            final.append(tr)
+        for gdf in shot_dfs:
+            arc, mk = _arc_trace_from_df(gdf, frac=1.0, opacity=1.0)
+            final.append(arc)
+            final.append(mk)
+        final.append(
+            go.Scatter3d(
+                x=[None], y=[None], z=[None], mode="lines",
+                line=dict(color=COLOR_MADE, width=5), name="Made",
+            )
+        )
+        final.append(
+            go.Scatter3d(
+                x=[None], y=[None], z=[None], mode="lines",
+                line=dict(color=COLOR_MISS, width=5), name="Missed",
+            )
+        )
+        # Replace figure data with final state as default view
+        fig.data = []
+        for tr in final:
+            fig.add_trace(tr)
+
+    layout_kw: dict = dict(
+        scene=scene,
+        margin=dict(l=0, r=0, t=36, b=0),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.0, x=0,
-            font=dict(size=11), bgcolor="rgba(0,0,0,0)",
-            title=None,
+            font=dict(size=11), bgcolor="rgba(0,0,0,0)", title=None,
         ),
         paper_bgcolor="#0E1117",
         font=dict(color="#E8E8E8", size=12),
@@ -934,6 +1155,115 @@ def build_scene1_figure(shots: pd.DataFrame, title: str = "") -> go.Figure:
     )
     if title:
         layout_kw["title"] = dict(text=title, font=dict(size=14), x=0, xanchor="left")
+
+    if animate and n_shots > 0:
+        steps = max(3, int(draw_steps))
+        frames = []
+        frame_names = []
+        for si in range(n_shots):
+            for s in range(1, steps + 1):
+                frac = s / steps
+                name = f"s{si}_p{s}"
+                frame_names.append(name)
+                frames.append(
+                    go.Frame(data=pack_frame(si, frac), name=name)
+                )
+            # brief hold on completed shot
+            hold = f"s{si}_hold"
+            frame_names.append(hold)
+            frames.append(go.Frame(data=pack_frame(si, 1.0), name=hold))
+
+        # end frame: all full opacity
+        end_data = []
+        for tr in court_traces:
+            end_data.append(tr)
+        for gdf in shot_dfs:
+            a, m = _arc_trace_from_df(gdf, frac=1.0, opacity=1.0)
+            end_data.append(a)
+            end_data.append(m)
+        end_data.append(
+            go.Scatter3d(
+                x=[None], y=[None], z=[None], mode="lines",
+                line=dict(color=COLOR_MADE, width=5), name="Made",
+            )
+        )
+        end_data.append(
+            go.Scatter3d(
+                x=[None], y=[None], z=[None], mode="lines",
+                line=dict(color=COLOR_MISS, width=5), name="Missed",
+            )
+        )
+        frames.append(go.Frame(data=end_data, name="end"))
+        fig.frames = frames
+
+        layout_kw["updatemenus"] = [
+            dict(
+                type="buttons",
+                showactive=False,
+                y=1.12,
+                x=0.0,
+                xanchor="left",
+                yanchor="top",
+                direction="left",
+                pad=dict(t=0, r=8),
+                buttons=[
+                    dict(
+                        label="▶ Play shots",
+                        method="animate",
+                        args=[
+                            None,
+                            dict(
+                                frame=dict(duration=90, redraw=True),
+                                fromcurrent=True,
+                                mode="immediate",
+                                transition=dict(duration=40),
+                            ),
+                        ],
+                    ),
+                    dict(
+                        label="⏸ Pause",
+                        method="animate",
+                        args=[
+                            [None],
+                            dict(
+                                frame=dict(duration=0, redraw=False),
+                                mode="immediate",
+                                transition=dict(duration=0),
+                            ),
+                        ],
+                    ),
+                ],
+            )
+        ]
+        # Slider over shot index (hold frames)
+        slider_steps = []
+        for si in range(n_shots):
+            slider_steps.append(
+                dict(
+                    method="animate",
+                    args=[
+                        [f"s{si}_hold"],
+                        dict(
+                            mode="immediate",
+                            frame=dict(duration=0, redraw=True),
+                            transition=dict(duration=0),
+                        ),
+                    ],
+                    label=str(si + 1),
+                )
+            )
+        layout_kw["sliders"] = [
+            dict(
+                active=n_shots - 1 if n_shots else 0,
+                currentvalue=dict(prefix="Shot ", visible=True, font=dict(size=12)),
+                pad=dict(t=30, b=0),
+                len=0.7,
+                x=0.15,
+                y=0,
+                steps=slider_steps,
+            )
+        ]
+
     fig.update_layout(**layout_kw)
     return fig
 
@@ -985,7 +1315,7 @@ def build_scene2_figure(
     shots: pd.DataFrame,
     player_name: str = DEFAULT_PLAYER,
 ) -> go.Figure:
-    """Scene 2: dark half-court scatter; optional Envato texture underlay."""
+    """Scene 2: upright Spurs half-court scatter (straight top-down)."""
     pts = build_scene2_points(shots)
     stats = compute_shot_stats(shots)
     title = f"{player_name}: {stats['label']}"
@@ -993,21 +1323,22 @@ def build_scene2_figure(
     fig = go.Figure()
     tex = _court_texture_path()
     if tex:
+        # Texture must be axis-aligned, basket at bottom
         fig.add_layout_image(
             dict(
                 source=tex,
                 xref="x",
                 yref="y",
-                x=-1,
-                y=48,
-                sizex=52,
-                sizey=50,
+                x=0,
+                y=47,
+                sizex=50,
+                sizey=47,
                 sizing="stretch",
-                opacity=0.85,
+                opacity=0.9,
                 layer="below",
             )
         )
-    for tr in halfcourt_line_traces():
+    for tr in halfcourt_spurs_traces():
         fig.add_trace(tr)
 
     if not pts.empty:
@@ -1020,10 +1351,10 @@ def build_scene2_figure(
                     y=miss["y"],
                     mode="markers",
                     marker=dict(
-                        size=10,
+                        size=11,
                         color=COLOR_MISS_2D,
-                        opacity=0.75,
-                        line=dict(width=0),
+                        opacity=0.8,
+                        line=dict(width=0.5, color=SPURS_SILVER_DIM),
                     ),
                     name="Missed",
                     text=miss.get("text"),
@@ -1037,10 +1368,10 @@ def build_scene2_figure(
                     y=made["y"],
                     mode="markers",
                     marker=dict(
-                        size=10,
+                        size=11,
                         color=COLOR_MADE_2D,
-                        opacity=0.9,
-                        line=dict(width=0),
+                        opacity=0.95,
+                        line=dict(width=0.5, color="#FFFFFF"),
                     ),
                     name="Made",
                     text=made.get("text"),
@@ -1049,15 +1380,18 @@ def build_scene2_figure(
             )
 
     fig.update_layout(
-        title=dict(text=title, x=0.5, xanchor="center", font=dict(size=14)),
+        title=dict(text=title, x=0.5, xanchor="center", font=dict(size=14, color=SPURS_SILVER)),
+        # Upright: y up the page (baseline bottom → half-court top)
         xaxis=dict(
-            range=[-1, 51],
+            range=[-2, 52],
             scaleanchor="y",
             scaleratio=1,
+            constrain="domain",
             showgrid=False,
             zeroline=False,
             showticklabels=False,
             title="",
+            fixedrange=True,
         ),
         yaxis=dict(
             range=[-2, 48],
@@ -1065,12 +1399,21 @@ def build_scene2_figure(
             zeroline=False,
             showticklabels=False,
             title="",
+            fixedrange=True,
         ),
-        plot_bgcolor=COURT_BG_2D,
-        paper_bgcolor="#0E1117",
-        font=dict(color="#E8EEF7", size=12),
-        margin=dict(l=10, r=10, t=36, b=16),
-        legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, font=dict(size=11), title=None),
-        height=720,
+        plot_bgcolor=SPURS_BLACK,
+        paper_bgcolor=SPURS_BLACK,
+        font=dict(color=SPURS_SILVER, size=12),
+        margin=dict(l=8, r=8, t=40, b=12),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            x=0,
+            font=dict(size=11, color=SPURS_SILVER),
+            title=None,
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        height=760,
     )
     return fig
