@@ -10,6 +10,7 @@ import {
   SPURS_LINE,
   SPURS_PAINT,
   SPURS_WOOD,
+  SPURS_WOOD_DARK,
 } from "@/lib/court-constants";
 
 /** ESPN half-court: rim at (25,0), baseline behind at -5.25, half ~41.75 */
@@ -70,7 +71,23 @@ export function Scene2Chart({ data }: { data: PlayoffDataset }) {
           <g transform={`scale(1,-1) translate(0, ${-(BASELINE + HALF)})`}>
             <rect x={-1.5} y={BASELINE - 1.5} width={W + 3} height={H + 3} fill={SPURS_BG} />
             <rect x={0} y={BASELINE} width={W} height={H} fill={SPURS_WOOD} />
-            <rect x={17} y={BASELINE} width={16} height={19 + BASELINE} fill={SPURS_PAINT} />
+            {/* Wood-red key (not solid black) */}
+            <rect
+              x={17}
+              y={BASELINE}
+              width={16}
+              height={19 + BASELINE}
+              fill={SPURS_PAINT}
+              opacity={0.88}
+            />
+            <rect
+              x={17}
+              y={BASELINE}
+              width={16}
+              height={19 + BASELINE}
+              fill={SPURS_WOOD_DARK}
+              opacity={0.15}
+            />
             {/* outer */}
             <path
               d={`M0 ${BASELINE} H50 V${HALF} H0 Z`}

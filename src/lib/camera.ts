@@ -51,6 +51,9 @@ export function bezier3(
   ];
 }
 
-export const SHOT_DRAW_DURATION = 0.55;
-export const SHOT_HOLD_DURATION = 0.18;
-export const PAST_ARC_OPACITY = 0.34;
+/** Seconds to draw one arc release → rim (snappy broadcast feel). */
+export const SHOT_DRAW_DURATION = 0.42;
+/** Pause after full arc before next shot. */
+export const SHOT_HOLD_DURATION = 0.14;
+/** Faded opacity of completed arcs while sequence continues. */
+export const PAST_ARC_OPACITY = 0.38;
