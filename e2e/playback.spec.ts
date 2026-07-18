@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test("game change resets toward shot one and court stays usable", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/wemby-shot-lab");
   await expect(page.getByRole("heading", { name: /Wembanyama/i })).toBeVisible();
 
   const select = page.getByLabel("Playoff game");

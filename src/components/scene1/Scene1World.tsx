@@ -27,7 +27,8 @@ function CourtLayer() {
   const [mode, setMode] = useState<"proc" | "glb">("proc");
   useEffect(() => {
     let cancelled = false;
-    fetch("/models/court.glb", { method: "HEAD" })
+    const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+    fetch(`${base}/models/court.glb`, { method: "HEAD" })
       .then((r) => {
         if (!cancelled && r.ok) setMode("glb");
       })
@@ -47,7 +48,8 @@ function CourtLayer() {
 }
 
 function GlbCourt() {
-  const { scene } = useGLTF("/models/court.glb");
+  const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  const { scene } = useGLTF(`${base}/models/court.glb`);
   const cloned = useMemo(() => scene.clone(true), [scene]);
   // Identity transform — court never moves
   return <primitive object={cloned} />;

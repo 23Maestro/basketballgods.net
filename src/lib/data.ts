@@ -2,9 +2,13 @@ import type { Game, PlayoffDataset, Shot, ShotStats } from "./types";
 
 let cached: PlayoffDataset | null = null;
 
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 export async function loadPlayoffData(): Promise<PlayoffDataset> {
   if (cached) return cached;
-  const res = await fetch("/data/playoff-2026.json", { cache: "force-cache" });
+  const res = await fetch(`${BASE}/data/playoff-2026.json`, {
+    cache: "force-cache",
+  });
   if (!res.ok) throw new Error(`Failed to load playoff data: ${res.status}`);
   cached = (await res.json()) as PlayoffDataset;
   return cached;
