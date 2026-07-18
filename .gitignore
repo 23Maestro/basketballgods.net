@@ -13,3 +13,11 @@ build/
 .vscode/
 .env
 .env.*
+node_modules/
+.next/
+out/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+playwright-report/
+test-results/

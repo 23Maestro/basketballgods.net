@@ -1,38 +1,63 @@
-# basketballgods.net — Wembanyama 2026 Playoff Shots
+# Wemby Shot Lab (`basketballgods.net`)
 
-Streamlit app: per-game **3D** field-goal arcs + full-playoff **half-court** overview for Victor Wembanyama’s 2025–26 postseason.
+Victor Wembanyama **2026 playoff** field-goal visualization.
 
-- **Data:** ESPN play-by-play via [sportsdataverse](https://github.com/sportsdataverse) (public, no API key)
-- **Shots only:** free throws excluded  
-- **Counts:** live ESPN FGA (e.g. ~366) may differ slightly from other sites (~357) — different filters/sources, not a bug
+| Surface | Stack |
+|---------|--------|
+| **Production UI** | Next.js App Router · TypeScript · React Three Fiber · Tailwind · Motion |
+| **Data pipeline** | Python `helpers.py` (ESPN / sportsdataverse) → static JSON |
+| **Legacy** | Streamlit `app.py` still present for local reference |
 
-## Local run
+## Commands
 
 ```bash
-cd nba-3d-live-shot   # or your clone path
-python -m venv .venv
+# 1) Refresh playoff JSON from ESPN (needs Python venv + network)
 source .venv/bin/activate
 pip install -r requirements.txt
-# macOS: brew install libomp   # if xgboost fails to load
-streamlit run app.py
+python scripts/export_playoff_json.py
+# → public/data/playoff-2026.json
+
+# 2) Next.js app
+npm install
+npm run dev          # http://localhost:3000
+npm run build && npm start
+npm run test         # Vitest (data parity)
+npm run test:e2e     # Playwright
+npm run typecheck
 ```
 
-## Deploy (Streamlit Community Cloud)
-
-1. Repo: [23Maestro/basketballgods.net](https://github.com/23Maestro/basketballgods.net)
-2. Open [share.streamlit.io](https://share.streamlit.io) → sign in with GitHub
-3. **Create app** → this repo → branch `main` → main file `app.py`
-4. Advanced → **Python 3.12** recommended
-5. Deploy. Pushes to `main` update the app.
-
-No secrets required.
-
-## Envato court texture (optional)
-
-See [`assets/README.md`](assets/README.md). Place `assets/court/halfcourt.png` to underlay Scene 2.
-
-## Tests
+## Data export
 
 ```bash
-pytest tests/ -v
+npm run export:data
+# or: python scripts/export_playoff_json.py
 ```
+
+Production loads **only** `public/data/playoff-2026.json` (22 games, 366 FGA). No Python at request time.
+
+## Optional court model
+
+Place a licensed GLB at:
+
+```
+public/models/court.glb
+```
+
+If absent, a procedural Spurs-styled court is used.
+
+## Deploy (Vercel project: `wemby-shot-lab`)
+
+Separate from singleton-systems.com:
+
+```bash
+npm run build
+npm exec -- vercel deploy --prod -y --name wemby-shot-lab
+```
+
+## Camera constants (Scene 1)
+
+Edit `src/lib/camera.ts`:
+
+- `CAMERA_START` · `CAMERA_CURVE_CONTROL` · `CAMERA_HOME`
+- `CAMERA_LOOK_AT` · `CAMERA_MOVE_DURATION`
+- `SHOT_DRAW_DURATION` · `SHOT_HOLD_DURATION` · `PAST_ARC_OPACITY`
