@@ -18,9 +18,15 @@ DEFAULT_PLAYER = "Victor Wembanyama"
 # season_type: 1=preseason, 2=regular, 3=postseason, 4=all-star, 5=off-season
 POSTSEASON_TYPE = 3
 
-# ESPN half-court feet: x along baseline (0–50), y from baseline outward
+# ESPN half-court feet (shot charts): origin at the BASKET, not the baseline.
+# x: sideline↔sideline 0–50 (center 25). y: toward half-court (rim ≈ y=0).
+# Real NBA puts the rim 5.25 ft in front of the baseline; we draw that offset
+# behind the rim so markings match ESPN points (layups sit on the rim).
 ESPN_RIM_X = 25.0
-ESPN_RIM_Y = 5.25  # rim is 5.25 ft from baseline
+ESPN_RIM_Y = 0.0
+BASELINE_Y = -5.25  # feet behind rim (toward out-of-bounds)
+HALFLINE_Y = 41.75  # 47 ft half-court measured from baseline → from rim
+PAINT_DEPTH_FROM_RIM = 19.0 + BASELINE_Y  # 13.75 ft past rim toward midcourt
 # Full-court feet used for 3D arcs (basket on right side)
 FULL_RIM_X = 88.75
 FULL_RIM_Y = 25.0
@@ -213,10 +219,17 @@ def halfcourt_spurs_traces(
     apron: str = SPURS_APRON,
 ) -> list[go.Scatter]:
     """
-    Orthographic half-court: x = width 0–50, y = baseline→half 0–47.
-    Spurs black paint + silver lines + maple floor (no tilt).
+    Orthographic half-court aligned to ESPN shot coords.
+
+    Basket/rim at (25, 0); baseline behind the rim at y=BASELINE_Y;
+    half-court line near y=HALFLINE_Y. Spurs black paint + silver lines.
     """
     traces: list[go.Scatter] = []
+    y0 = BASELINE_Y  # -5.25
+    y_half = HALFLINE_Y  # 41.75
+    y_ft = PAINT_DEPTH_FROM_RIM  # 13.75 (FT line / paint top)
+    paint_l, paint_r = 17.0, 33.0
+    rx, ry = ESPN_RIM_X, ESPN_RIM_Y
 
     def fill(xs, ys, fillcolor, name="fill"):
         traces.append(
@@ -246,52 +259,66 @@ def halfcourt_spurs_traces(
             )
         )
 
-    # Apron (outside floor) then wood floor — upright rectangle
-    fill([-2, 52, 52, -2, -2], [-2, -2, 48, 48, -2], apron, "apron")
-    fill([0, 50, 50, 0, 0], [0, 0, 47, 47, 0], wood, "floor")
+    # Apron + floor (include baseline strip behind rim)
+    fill([-3, 53, 53, -3, -3], [y0 - 2, y0 - 2, y_half + 2, y_half + 2, y0 - 2], apron, "apron")
+    fill([0, 50, 50, 0, 0], [y0, y0, y_half, y_half, y0], wood, "floor")
 
-    # Black paint (key)
-    paint_l, paint_r = 17.0, 33.0
-    fill([paint_l, paint_r, paint_r, paint_l, paint_l], [0, 0, 19, 19, 0], paint, "paint")
+    # Paint (key): baseline → FT line
+    fill([paint_l, paint_r, paint_r, paint_l, paint_l], [y0, y0, y_ft, y_ft, y0], paint, "paint")
 
     # Outer boundary
-    line([0, 50, 50, 0, 0], [0, 0, 47, 47, 0], width=2.5)
-    # Paint outline
-    line([paint_l, paint_r, paint_r, paint_l, paint_l], [0, 0, 19, 19, 0], width=2.0)
-    # FT line
-    line([paint_l, paint_r], [19, 19], width=2.0)
-    # Free-throw circle (upper half toward midcourt)
+    line([0, 50, 50, 0, 0], [y0, y0, y_half, y_half, y0], width=2.5)
+    # Paint outline + FT line
+    line([paint_l, paint_r, paint_r, paint_l, paint_l], [y0, y0, y_ft, y_ft, y0], width=2.0)
+    line([paint_l, paint_r], [y_ft, y_ft], width=2.0)
+    # FT circle (toward midcourt)
     theta = np.linspace(0, np.pi, 60)
-    line(25 + 6 * np.cos(theta), 19 + 6 * np.sin(theta), width=1.8)
-    # Restricted area
+    line(rx + 6 * np.cos(theta), y_ft + 6 * np.sin(theta), width=1.8)
+    # Restricted area (semicircle toward midcourt)
     theta_r = np.linspace(0, np.pi, 40)
-    line(25 + 4 * np.cos(theta_r), ESPN_RIM_Y + 4 * np.sin(theta_r), width=1.5)
-    # Hoop + backboard (silver)
+    line(rx + 4 * np.cos(theta_r), ry + 4 * np.sin(theta_r), width=1.5)
+    # Rim + backboard (board is ~1.25 ft behind rim center toward baseline)
     th = np.linspace(0, 2 * np.pi, 60)
-    line(25 + 0.75 * np.cos(th), ESPN_RIM_Y + 0.75 * np.sin(th), width=2.5, col=SPURS_RIM, name="hoop")
-    line([22, 28], [4.0, 4.0], width=3.0, col=SPURS_SILVER_DIM, name="board")
-    # 3-point corners + arc
+    line(rx + 0.75 * np.cos(th), ry + 0.75 * np.sin(th), width=2.5, col=SPURS_RIM, name="hoop")
+    board_y = ry - 1.25
+    line([22, 28], [board_y, board_y], width=3.5, col=SPURS_SILVER_DIM, name="board")
+
+    # 3-point: corners 3 ft from sideline; arc 23.75 ft from rim
     r3 = 23.75
-    y_lo, y_hi = 3.0, 47.0
-    # corner lines from baseline
-    dy = ESPN_RIM_Y - 3.0
-    dx = float(np.sqrt(max(r3**2 - (ESPN_RIM_X - 3.0) ** 2, 0.0)))
-    # Use standard: corners at x=3 and x=47, arc from rim
-    corner_y = 14.0  # where corner meets arc approx for NBA
+    corner_x0, corner_x1 = 3.0, 47.0
+    # y where arc meets corner line: dy = sqrt(r^2 - dx^2)
+    dx_c = rx - corner_x0  # 22
+    corner_y = ry + float(np.sqrt(max(r3**2 - dx_c**2, 0.0)))  # ≈ 8.94
+    line([corner_x0, corner_x0], [y0, corner_y], width=2.0)
+    line([corner_x1, corner_x1], [y0, corner_y], width=2.0)
 
     def ang(x, y):
-        return np.arctan2(y - ESPN_RIM_Y, x - ESPN_RIM_X)
+        return np.arctan2(y - ry, x - rx)
 
-    a0 = ang(3, corner_y)
-    a1 = ang(47, corner_y)
-    # extend corner lines from baseline to arc intersection
-    line([3, 3], [0, corner_y], width=2.0)
-    line([47, 47], [0, corner_y], width=2.0)
-    aa = np.linspace(a0, a1, 90)
-    line(ESPN_RIM_X + r3 * np.cos(aa), ESPN_RIM_Y + r3 * np.sin(aa), width=2.0)
-    # Hash marks / midcourt hash at y=47
-    line([0, 50], [47, 47], width=1.5, col=SPURS_SILVER_DIM)
+    a0 = ang(corner_x0, corner_y)
+    a1 = ang(corner_x1, corner_y)
+    aa = np.linspace(a0, a1, 100)
+    line(rx + r3 * np.cos(aa), ry + r3 * np.sin(aa), width=2.0)
+    # Half-court line
+    line([0, 50], [y_half, y_half], width=1.5, col=SPURS_SILVER_DIM)
     return traces
+
+
+def normalize_halfcourt_xy(espn_x: float, espn_y: float) -> tuple[float, float]:
+    """
+    Keep ESPN shot points on the offensive half-court for plotting.
+    ESPN rim ≈ (25, 0); rare heaves past half are clamped to the half-line.
+    """
+    x = float(espn_x)
+    y = float(espn_y)
+    # Sideline clamp (ESPN is already ~1–49)
+    x = min(50.0, max(0.0, x))
+    # Allow a foot behind the rim (coord noise); fold deep heaves to half
+    if y > HALFLINE_Y + 1:
+        y = HALFLINE_Y
+    if y < BASELINE_Y:
+        y = BASELINE_Y
+    return x, y
 
 
 # --------------------------------------------------------------
@@ -366,7 +393,7 @@ def map_espn_to_fullcourt(espn_x: float, espn_y: float) -> tuple[float, float]:
     """
     Map ESPN half-court feet → full-court feet with basket on the right.
 
-    ESPN: x along width (0–50, center 25), y from baseline outward (rim ≈ 5.25).
+    ESPN: x 0–50 (center 25), y from rim toward midcourt (rim ≈ y=0).
     Full: rim at (FULL_RIM_X, FULL_RIM_Y); depth runs toward midcourt as y grows.
     """
     dx = float(espn_x) - ESPN_RIM_X
@@ -442,6 +469,14 @@ def enrich_shot_row(df: pd.DataFrame) -> pd.DataFrame:
     ey = pd.to_numeric(out.get("coordinate.y"), errors="coerce")
     out["espn_x"] = ex
     out["espn_y"] = ey
+
+    # Half-court plot coords (clamped to floor); used by Scene 2
+    hc = [
+        normalize_halfcourt_xy(x, y) if pd.notna(x) and pd.notna(y) else (np.nan, np.nan)
+        for x, y in zip(ex, ey)
+    ]
+    out["hc_x"] = [h[0] for h in hc]
+    out["hc_y"] = [h[1] for h in hc]
 
     mapped = [
         map_espn_to_fullcourt(x, y) if pd.notna(x) and pd.notna(y) else (np.nan, np.nan)
@@ -1270,19 +1305,36 @@ def build_scene1_figure(
 
 def build_scene2_points(shots: pd.DataFrame) -> pd.DataFrame:
     """
-    Scene 2 data: one row per FG on half-court ESPN feet (x,y) for scatter overview.
+    Scene 2 data: one row per FG on half-court feet (x,y), rim at (25,0).
+    Uses normalized coords so points stay on the drawn floor.
     """
     if shots is None or shots.empty:
         return pd.DataFrame()
 
     out = shots.copy()
-    if "espn_x" not in out.columns:
+    if "espn_x" not in out.columns or "hc_x" not in out.columns:
         out = enrich_shot_row(out)
-    cols = [
+
+    # Prefer precomputed half-court coords
+    if "hc_x" in out.columns and "hc_y" in out.columns:
+        pts = out.dropna(subset=["hc_x", "hc_y"]).copy()
+        pts["x"] = pts["hc_x"]
+        pts["y"] = pts["hc_y"]
+    else:
+        pts = out.dropna(subset=["espn_x", "espn_y"]).copy()
+        xy = [normalize_halfcourt_xy(a, b) for a, b in zip(pts["espn_x"], pts["espn_y"])]
+        pts["x"] = [p[0] for p in xy]
+        pts["y"] = [p[1] for p in xy]
+
+    keep = [
         c
         for c in [
+            "x",
+            "y",
             "espn_x",
             "espn_y",
+            "hc_x",
+            "hc_y",
             "made",
             "result",
             "zone",
@@ -1296,11 +1348,9 @@ def build_scene2_points(shots: pd.DataFrame) -> pd.DataFrame:
             "clock",
             "sequenceNumber",
         ]
-        if c in out.columns
+        if c in pts.columns
     ]
-    pts = out[cols].dropna(subset=["espn_x", "espn_y"]).copy()
-    pts = pts.rename(columns={"espn_x": "x", "espn_y": "y"})
-    return pts.reset_index(drop=True)
+    return pts[keep].reset_index(drop=True)
 
 
 def _court_texture_path() -> str | None:
@@ -1323,16 +1373,16 @@ def build_scene2_figure(
     fig = go.Figure()
     tex = _court_texture_path()
     if tex:
-        # Texture must be axis-aligned, basket at bottom
+        # Texture: axis-aligned, basket near bottom; map to baseline→half
         fig.add_layout_image(
             dict(
                 source=tex,
                 xref="x",
                 yref="y",
                 x=0,
-                y=47,
+                y=HALFLINE_Y,
                 sizex=50,
-                sizey=47,
+                sizey=HALFLINE_Y - BASELINE_Y,
                 sizing="stretch",
                 opacity=0.9,
                 layer="below",
@@ -1344,6 +1394,7 @@ def build_scene2_figure(
     if not pts.empty:
         made = pts[pts["made"] == True]  # noqa: E712
         miss = pts[pts["made"] == False]  # noqa: E712
+        # Slightly smaller markers so edge shots don't look "off court"
         if not miss.empty:
             fig.add_trace(
                 go.Scatter(
@@ -1351,10 +1402,10 @@ def build_scene2_figure(
                     y=miss["y"],
                     mode="markers",
                     marker=dict(
-                        size=11,
+                        size=9,
                         color=COLOR_MISS_2D,
-                        opacity=0.8,
-                        line=dict(width=0.5, color=SPURS_SILVER_DIM),
+                        opacity=0.85,
+                        line=dict(width=0.4, color=SPURS_SILVER_DIM),
                     ),
                     name="Missed",
                     text=miss.get("text"),
@@ -1368,10 +1419,10 @@ def build_scene2_figure(
                     y=made["y"],
                     mode="markers",
                     marker=dict(
-                        size=11,
+                        size=9,
                         color=COLOR_MADE_2D,
                         opacity=0.95,
-                        line=dict(width=0.5, color="#FFFFFF"),
+                        line=dict(width=0.4, color="#FFFFFF"),
                     ),
                     name="Made",
                     text=made.get("text"),
@@ -1379,11 +1430,12 @@ def build_scene2_figure(
                 )
             )
 
+    pad = 1.5
     fig.update_layout(
         title=dict(text=title, x=0.5, xanchor="center", font=dict(size=14, color=SPURS_SILVER)),
-        # Upright: y up the page (baseline bottom → half-court top)
+        # Upright: baseline (behind rim) at bottom → half-court at top
         xaxis=dict(
-            range=[-2, 52],
+            range=[-pad, 50 + pad],
             scaleanchor="y",
             scaleratio=1,
             constrain="domain",
@@ -1394,7 +1446,7 @@ def build_scene2_figure(
             fixedrange=True,
         ),
         yaxis=dict(
-            range=[-2, 48],
+            range=[BASELINE_Y - pad, HALFLINE_Y + pad],
             showgrid=False,
             zeroline=False,
             showticklabels=False,

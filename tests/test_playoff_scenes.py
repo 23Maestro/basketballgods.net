@@ -65,13 +65,22 @@ def test_paint_perimeter_partition(playoff_fgs: pd.DataFrame):
 
 
 def test_coordinate_mapping_rim_proximity():
-    # Paint-ish ESPN point near rim maps near full-court rim
-    cx, cy = map_espn_to_fullcourt(25, 5.25)
+    from helpers import normalize_halfcourt_xy, ESPN_RIM_Y, HALFLINE_Y
+
+    # ESPN rim is at y≈0; maps to full-court rim
+    cx, cy = map_espn_to_fullcourt(25, 0)
     assert abs(cx - 88.75) < 0.01
     assert abs(cy - 25.0) < 0.01
     # Geometric distance near rim is small
-    assert geometric_distance_ft(25, 2) < 5
-    assert geometric_distance_ft(10, 25) > 20
+    assert geometric_distance_ft(25, 1) < 3
+    assert geometric_distance_ft(10, 24) > 20
+    # Half-court normalize keeps heaves on floor
+    hx, hy = normalize_halfcourt_xy(21, 70)
+    assert 0 <= hx <= 50
+    assert hy <= HALFLINE_Y + 0.01
+    # Negative y (coord noise) stays near baseline strip
+    _, hy2 = normalize_halfcourt_xy(25, -1)
+    assert hy2 >= -6
 
 
 def test_classify_zone_rules():
@@ -101,10 +110,15 @@ def test_scene1_single_game(playoff_fgs: pd.DataFrame):
 
 
 def test_scene2_full_run(playoff_fgs: pd.DataFrame):
+    from helpers import BASELINE_Y, HALFLINE_Y
+
     pts = build_scene2_points(playoff_fgs)
     assert len(pts) == len(playoff_fgs.dropna(subset=["espn_x", "espn_y"]))
     assert "made" in pts.columns
     assert "zone" in pts.columns
+    # All plotted points sit on the drawn half-court
+    assert pts["x"].between(0, 50).all()
+    assert pts["y"].between(BASELINE_Y - 0.01, HALFLINE_Y + 0.01).all()
     fig = build_scene2_figure(playoff_fgs, player_name=DEFAULT_PLAYER)
     stats = compute_shot_stats(playoff_fgs)
     # Title / caption must encode makes/attempts
